@@ -44,6 +44,12 @@ DIY 轻量主机监控面板：服务端 Python 标准库零依赖采集 `/proc`
 3. 菜单 **Build → Build Bundle(s) / APK(s) → Build APK(s)**。
 4. 生成的 APK 在 `app/build/outputs/apk/debug/app-debug.apk`，传到手机安装即可。
 
+### 云端编译（GitHub Actions，无需本地 Android Studio）
+- 工作流：`.github/workflows/build-apk.yml`
+- 推送 `main` 或在 Actions 页手动触发（`workflow_dispatch`）后，runner 自动装 SDK、用 Gradle 7.6.4 编译 debug APK。
+- 构建完成后，在该次运行页面底部 **Artifacts** 下载 `monitor-panel-debug`，解压即得 `app-debug.apk`（artifact 保留 30 天）。
+- 也可在仓库页 **Actions → Build Android APK → Run workflow** 手动重跑。
+
 ### 修改面板地址 / 密钥
 打开 `app/src/main/java/com/lyh/monitorpanel/MainActivity.java`，改顶部常量：
 
