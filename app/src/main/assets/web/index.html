@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>服务器监控</title>
+<style>
+  :root{
+    --green:#20a53a; --green-l:#e8f5ec; --orange:#fb7d00; --red:#fc6d26;
+    --bg:#f6f6f6; --card:#fff; --line:#ececec; --txt:#333; --sub:#999; --txt2:#666;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:"微软雅黑","Microsoft YaHei",Arial,Helvetica,sans-serif;font-size:13px}
+  .topbar{background:var(--green);color:#fff;padding:14px 18px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
+  .topbar .brand{font-size:17px;font-weight:700;letter-spacing:1px}
+  .topbar .meta{font-size:12px;opacity:.92;display:flex;flex-wrap:wrap;gap:6px 16px}
+  .topbar .meta b{font-weight:600}
+  .topbar .status{margin-left:auto;font-size:12px;display:flex;align-items:center;gap:6px}
+  .dot{width:8px;height:8px;border-radius:50%;background:#fff;display:inline-block}
+  .dot.on{background:#d6ffd6}.dot.off{background:#ffd6d6}
+  main{max-width:1200px;margin:0 auto;padding:16px}
+  .alert-bar{display:none;margin-bottom:14px;border-radius:8px;padding:10px 14px;font-size:13px}
+  .alert-bar.bad{background:#fdeceb;color:var(--red);border:1px solid #f7c6c3}
+  .alert-bar.warn{background:#fff4e8;color:var(--orange);border:1px solid #fbdcb8}
+  .alert-bar .item{padding:3px 0}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:520px){.cards{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .card h3{font-size:13px;color:var(--sub);font-weight:600;margin-bottom:12px;display:flex;justify-content:space-between}
+  .card .big{font-size:24px;font-weight:700;color:var(--txt)}
+  .card .big small{font-size:13px;color:var(--sub);font-weight:400;margin-left:4px}
+  .card .sub{margin-top:8px;font-size:12px;color:var(--txt2);line-height:1.7}
+  .bar{height:8px;background:#f0f0f0;border-radius:5px;overflow:hidden;margin-top:10px}
+  .bar i{display:block;height:100%;border-radius:5px;background:var(--green);transition:width .5s}
+  .bar.warn i{background:var(--orange)}.bar.bad i{background:var(--red)}
+  .section{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin-top:14px}
+  .section h3{font-size:13px;color:var(--sub);font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .tabs{display:flex;gap:6px;margin-left:auto}
+  .tabs button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:3px 12px;font-size:12px;color:var(--txt2);cursor:pointer}
+  .tabs button.active{background:var(--green);color:#fff;border-color:var(--green)}
+  .chart-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:900px){.chart-row{grid-template-columns:1fr}}
+  .chart-box canvas{width:100%;height:150px;display:block}
+  .legend{display:flex;gap:14px;font-size:11px;color:var(--sub);margin-top:6px;flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:10px;height:3px;border-radius:2px;display:inline-block}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  th{color:var(--sub);font-weight:600;background:#fafafa}
+  td.num,th.num{text-align:right}
+  td.cmd{white-space:normal;max-width:240px;color:var(--txt2)}
+  .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px}
+  .tag.ok{background:var(--green-l);color:var(--green)}
+  .tag.warn{background:#fff4e8;color:var(--orange)}
+  .tag.bad{background:#fdeceb;color:var(--red)}
+  .tag.gray{background:#f0f0f0;color:var(--txt2)}
+  .empty{color:var(--sub);padding:14px 0;text-align:center;font-size:12px}
+  .btns{display:flex;gap:6px}
+  button.act{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--txt2)}
+  button.act:hover{border-color:var(--green);color:var(--green)}
+  button.act.danger:hover{border-color:var(--red);color:var(--red)}
+  .search{border:1px solid var(--line);border-radius:6px;padding:5px 10px;font-size:12px;width:180px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{background:#f6f6f6;border-radius:6px;padding:4px 10px;font-size:12px;color:var(--txt2)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">服务器监控</div>
+  <div class="meta">
+    <span>主机 <b id="m-hostname">-</b></span>
+    <span>系统 <b id="m-os">-</b></span>
+    <span>内核 <b id="m-kernel">-</b></span>
+    <span>运行 <b id="m-uptime">-</b></span>
+    <span>时间 <b id="m-time">-</b></span>
+  </div>
+  <div class="status"><span id="dot" class="dot on"></span><span id="status-text">连接中…</span></div>
+</header>
+
+<main>
+  <div id="alert-bar" class="alert-bar"></div>
+
+  <section class="cards">
+    <div class="card">
+      <h3>CPU <span id="cpu-cores"></span></h3>
+      <div class="big"><span id="cpu-pct">-</span><small>%</small></div>
+      <div class="bar" id="cpu-bar"><i></i></div>
+      <div class="sub">负载 1/5/15：<span id="cpu-load">-</span></div>
+    </div>
+    <div class="card">
+      <h3>内存</h3>
+      <div class="big"><span id="mem-used">-</span><small>/ <span id="mem-total">-</span></small></div>
+      <div class="bar" id="mem-bar"><i></i></div>
+      <div class="sub">可用 <span id="mem-avail">-</span>　缓存 <span id="mem-cached">-</span></div>
+    </div>
+    <div class="card">
+      <h3>Swap</h3>
+      <div class="big"><span id="swap-used">-</span><small>/ <span id="swap-total">-</span></small></div>
+      <div class="sub" id="swap-sub">交换分区</div>
+    </div>
+    <div class="card">
+      <h3>网络</h3>
+      <div class="big">↓<span id="net-rx">-</span><small>/s</small></div>
+      <div class="big" style="font-size:18px;margin-top:4px">↑<span id="net-tx">-</span><small>/s</small></div>
+      <div class="sub">累计 ↓<span id="net-rxt">-</span>　↑<span id="net-txt">-</span></div>
+    </div>
+    <div class="card">
+      <h3>磁盘 IO</h3>
+      <div class="big" style="font-size:18px">读 <span id="io-rd">-</span><small>/s</small></div>
+      <div class="big" style="font-size:18px;margin-top:4px">写 <span id="io-wr">-</span><small>/s</small></div>
+      <div class="sub">累计读 <span id="io-rdt">-</span>　写 <span id="io-wrt">-</span></div>
+    </div>
+    <div class="card">
+      <h3>网络连接</h3>
+      <div class="big"><span id="conn-total">-</span><small>个</small></div>
+      <div class="sub">已建立 <span id="conn-est">-</span>　监听 <span id="conn-lst">-</span></div>
+    </div>
+    <div class="card">
+      <h3>温度</h3>
+      <div class="big" id="temp-val">-</div>
+      <div class="sub" id="temp-sub">传感器</div>
+    </div>
+    <div class="card">
+      <h3>运行服务</h3>
+      <div class="big"><span id="svc-count">-</span><small>个</small></div>
+      <div class="sub">Docker 容器 <span id="docker-count">-</span> 个</div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h3>历史趋势
+      <div class="tabs" id="hist-tabs">
+        <button data-range="3600" class="active">1 小时</button>
+        <button data-range="21600">6 小时</button>
+        <button data-range="86400">24 小时</button>
+      </div>
+    </h3>
+    <div class="chart-row">
+      <div class="chart-box">
+        <canvas id="hist-percent"></canvas>
+        <div class="legend">
+          <span><i style="background:#20a53a"></i>CPU%</span>
+          <span><i style="background:#3b82f6"></i>内存%</span>
+          <span><i style="background:#fb7d00"></i>磁盘%</span>
+        </div>
+      </div>
+      <div class="chart-box">
+        <canvas id="hist-net"></canvas>
+        <div class="legend">
+          <span><i style="background:#20a53a"></i>下行</span>
+          <span><i style="background:#fb7d00"></i>上行</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h3>磁盘分区</h3>
+    <table>
+      <thead><tr><th>挂载点</th><th>设备</th><th>文件系统</th><th class="num">已用</th><th class="num">总量</th><th class="num">使用率</th></tr></thead>
+      <tbody id="disk-body"></tbody>
+    </table>
+  </section>
+
+  <section class="section">
+    <h3>进程管理
+      <input class="search" id="proc-search" placeholder="搜索进程名 / 命令">
+    </h3>
+    <table>
+      <thead><tr><th>PID</th><th>名称</th><th>状态</th><th class="num">CPU%</th><th class="num">内存</th><th>命令</th><th></th></tr></thead>
+      <tbody id="proc-body"></tbody>
+    </table>
+  </section>
+
+  <div class="grid2">
+    <section class="section">
+      <h3>监听端口</h3>
+      <div class="chips" id="port-chips"></div>
+    </section>
+    <section class="section">
+      <h3>系统服务</h3>
+      <table>
+        <thead><tr><th>服务</th><th>说明</th></tr></thead>
+        <tbody id="svc-body"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <section class="section">
+    <h3>Docker 容器</h3>
+    <table>
+      <thead><tr><th>名称</th><th>镜像</th><th>状态</th><th>端口</th><th>操作</th></tr></thead>
+      <tbody id="docker-body"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get("token") || "";
+let HIST_RANGE = 3600;
+
+function fmtBytes(n){
+  if(n == null) return "-";
+  if(n < 1024) return n + " B";
+  const u = ["KB","MB","GB","TB"]; let i = -1;
+  do{ n /= 1024; i++; }while(n >= 1024 && i < u.length-1);
+  return n.toFixed(1) + " " + u[i];
+}
+function fmtUptime(s){
+  s = Math.floor(s);
+  const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60);
+  return (d? d+"天 ":"") + h + "时" + m + "分";
+}
+function barClass(p){ return p >= 85 ? "bar bad" : p >= 70 ? "bar warn" : "bar"; }
+function setBar(id, p){
+  const el = document.getElementById(id);
+  el.className = barClass(p);
+  el.querySelector("i").style.width = Math.min(100, p) + "%";
+}
+function escapeHtml(str){
+  return String(str||"").replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+}
+function api(path, method){
+  const url = path + (TOKEN? (path.includes("?")?"&":"?") + "token=" + encodeURIComponent(TOKEN) : "");
+  return fetch(url, {method: method||"GET", cache:"no-store"}).then(r=>{
+    if(r.status===401) throw new Error("401 未授权");
+    return r.json();
+  });
+}
+function drawChart(canvas, series, colors, maxVal){
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  const ctx = canvas.getContext("2d"); ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+  const all = series.flat();
+  if(!all.length) return;
+  const max = maxVal || Math.max(10, ...all) * 1.15;
+  const step = w / Math.max(1, Math.max(...series.map(s=>s.length)) - 1);
+  ctx.strokeStyle = "#f0f0f0"; ctx.lineWidth = 1;
+  for(let g=1;g<=3;g++){ const y = h - h*g/4; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  series.forEach((arr, si)=>{
+    if(!arr.length) return;
+    ctx.beginPath();
+    arr.forEach((v,i)=>{
+      const x = i*step, y = h - (v/max)*(h-14) - 6;
+      i? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+    });
+    ctx.strokeStyle = colors[si]; ctx.lineWidth = 2; ctx.stroke();
+    ctx.lineTo((arr.length-1)*step, h); ctx.lineTo(0, h); ctx.closePath();
+    ctx.fillStyle = colors[si]+"1f"; ctx.fill();
+  });
+}
+
+function renderAlerts(alerts){
+  const bar = document.getElementById("alert-bar");
+  if(!alerts.length){ bar.style.display="none"; return; }
+  const bad = alerts.some(a=>a.level==="bad");
+  bar.className = "alert-bar " + (bad? "bad":"warn");
+  bar.innerHTML = alerts.map(a=>`<div class="item">● ${escapeHtml(a.message)}</div>`).join("");
+  bar.style.display = "block";
+}
+
+function render(s){
+  document.getElementById("m-hostname").textContent = s.system.hostname;
+  document.getElementById("m-os").textContent = s.system.os;
+  document.getElementById("m-kernel").textContent = s.system.kernel;
+  document.getElementById("m-uptime").textContent = fmtUptime(s.system.uptime);
+  document.getElementById("m-time").textContent = s.system.time;
+
+  document.getElementById("cpu-cores").textContent = s.cpu.cores + " 核";
+  document.getElementById("cpu-pct").textContent = s.cpu.percent;
+  setBar("cpu-bar", s.cpu.percent);
+  document.getElementById("cpu-load").textContent = s.cpu.load.join(" / ");
+
+  document.getElementById("mem-used").textContent = fmtBytes(s.mem.used);
+  document.getElementById("mem-total").textContent = fmtBytes(s.mem.total);
+  document.getElementById("mem-avail").textContent = fmtBytes(s.mem.available);
+  document.getElementById("mem-cached").textContent = fmtBytes(s.mem.cached);
+  setBar("mem-bar", s.mem.percent);
+
+  document.getElementById("swap-used").textContent = fmtBytes(s.mem.swap_used);
+  document.getElementById("swap-total").textContent = fmtBytes(s.mem.swap_total);
+  document.getElementById("swap-sub").textContent = s.mem.swap_total ?
+    "Swap 使用率 " + s.mem.swap_percent + "%" : "未配置交换分区";
+
+  document.getElementById("net-rx").textContent = fmtBytes(s.net.rx_rate);
+  document.getElementById("net-tx").textContent = fmtBytes(s.net.tx_rate);
+  document.getElementById("net-rxt").textContent = fmtBytes(s.net.rx_total);
+  document.getElementById("net-txt").textContent = fmtBytes(s.net.tx_total);
+
+  document.getElementById("io-rd").textContent = fmtBytes(s.diskio.read_rate);
+  document.getElementById("io-wr").textContent = fmtBytes(s.diskio.write_rate);
+  document.getElementById("io-rdt").textContent = fmtBytes(s.diskio.read_total);
+  document.getElementById("io-wrt").textContent = fmtBytes(s.diskio.write_total);
+
+  document.getElementById("conn-total").textContent = s.connections.total;
+  document.getElementById("conn-est").textContent = s.connections.established;
+  document.getElementById("conn-lst").textContent = s.connections.listen;
+
+  if(s.temp && s.temp.length){
+    document.getElementById("temp-val").textContent = s.temp.map(t=>t.temp+"°C").join(" / ");
+    document.getElementById("temp-sub").textContent = s.temp.map(t=>t.zone).join(", ");
+  }else{
+    document.getElementById("temp-val").textContent = "-";
+    document.getElementById("temp-sub").textContent = "无温度传感器";
+  }
+
+  document.getElementById("svc-count").textContent = s.services.length;
+  document.getElementById("docker-count").textContent = s.docker.containers.length;
+
+  renderAlerts(s.alerts);
+
+  // 磁盘
+  document.getElementById("disk-body").innerHTML = s.disk.map(d=>`
+    <tr><td>${d.mount}</td><td>${d.device}</td><td>${d.fs}</td>
+    <td class="num">${fmtBytes(d.used)}</td><td class="num">${fmtBytes(d.total)}</td>
+    <td class="num">${d.percent}%</td></tr>`).join("")
+    || `<tr><td colspan="6" class="empty">无分区数据</td></tr>`;
+
+  // 端口
+  document.getElementById("port-chips").innerHTML = s.ports.map(p=>`<span class="chip">${p}</span>`).join("")
+    || `<span class="empty">无监听端口</span>`;
+
+  // 服务
+  document.getElementById("svc-body").innerHTML = s.services.map(v=>`
+    <tr><td>${escapeHtml(v.name)}</td><td class="cmd">${escapeHtml(v.desc)}</td></tr>`).join("")
+    || `<tr><td colspan="2" class="empty">未取到服务列表（可能无 systemd）</td></tr>`;
+
+  // Docker
+  const dw = document.getElementById("docker-body");
+  if(!s.docker.available){
+    dw.innerHTML = `<tr><td colspan="5" class="empty">Docker 不可用：${escapeHtml(s.docker.error||"-")}</td></tr>`;
+  }else if(!s.docker.containers.length){
+    dw.innerHTML = `<tr><td colspan="5" class="empty">没有容器</td></tr>`;
+  }else{
+    dw.innerHTML = s.docker.containers.map(c=>{
+      const running = c.state === "running";
+      const tag = running? `<span class="tag ok">${escapeHtml(c.status)}</span>` : `<span class="tag gray">${escapeHtml(c.status)}</span>`;
+      return `<tr>
+        <td><b>${escapeHtml(c.name)}</b></td>
+        <td class="cmd">${escapeHtml(c.image)}</td>
+        <td>${tag}</td>
+        <td class="cmd">${escapeHtml(c.ports)}</td>
+        <td class="btns">
+          <button class="act" onclick="dockerAct('restart','${escapeHtml(c.name)}')">重启</button>
+          ${running? `<button class="act danger" onclick="dockerAct('stop','${escapeHtml(c.name)}')">停止</button>`:""}
+        </td></tr>`;
+    }).join("");
+  }
+}
+
+function renderProcs(list){
+  document.getElementById("proc-body").innerHTML = list.map(p=>`
+    <tr>
+      <td>${p.pid}</td><td>${escapeHtml(p.name)}</td>
+      <td><span class="tag gray">${escapeHtml(p.state||"-")}</span></td>
+      <td class="num">${p.cpu}</td><td class="num">${fmtBytes(p.rss)}</td>
+      <td class="cmd">${escapeHtml(p.cmd)}</td>
+      <td class="btns"><button class="act danger" onclick="killProc(${p.pid})">结束</button></td>
+    </tr>`).join("") || `<tr><td colspan="7" class="empty">无匹配进程</td></tr>`;
+}
+
+function renderHistory(h){
+  const pts = h.points || [];
+  const cpu = pts.map(p=>p.cpu), mem = pts.map(p=>p.mem), disk = pts.map(p=>p.disk);
+  const rx = pts.map(p=>p.rx), tx = pts.map(p=>p.tx);
+  drawChart(document.getElementById("hist-percent"), [cpu,mem,disk], ["#20a53a","#3b82f6","#fb7d00"], 100);
+  const netMax = Math.max(...rx, ...tx, 1024);
+  drawChart(document.getElementById("hist-net"), [rx,tx], ["#20a53a","#fb7d00"], netMax);
+}
+
+async function refreshStatus(){
+  const dot = document.getElementById("dot"), st = document.getElementById("status-text");
+  try{
+    const s = await api("/api/status");
+    render(s);
+    dot.className = "dot on"; st.textContent = "在线 · " + new Date().toLocaleTimeString();
+    if(!document.getElementById("proc-search").value) renderProcs(s.procs);
+  }catch(e){
+    dot.className = "dot off"; st.textContent = "离线：" + e.message;
+  }
+}
+
+async function refreshHistory(){
+  try{ renderHistory(await api("/api/history?range=" + HIST_RANGE)); }
+  catch(e){ console.warn("history", e); }
+}
+
+let searchTimer;
+document.getElementById("proc-search").addEventListener("input", function(){
+  clearTimeout(searchTimer);
+  const q = this.value.trim();
+  searchTimer = setTimeout(async ()=>{
+    try{
+      const d = await api("/api/procs" + (q? "?search="+encodeURIComponent(q):""));
+      renderProcs(d.procs);
+    }catch(e){ console.warn(e); }
+  }, 250);
+});
+
+document.getElementById("hist-tabs").addEventListener("click", function(e){
+  const btn = e.target.closest("button"); if(!btn) return;
+  this.querySelectorAll("button").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  HIST_RANGE = parseInt(btn.dataset.range);
+  refreshHistory();
+});
+
+async function killProc(pid){
+  if(!confirm(`确认结束进程 PID ${pid}？`)) return;
+  try{
+    const r = await api("/api/proc/kill?pid="+pid, "POST");
+    if(!r.ok) alert("结束失败：" + r.message);
+    refreshStatus(); refreshProcs();
+  }catch(e){ alert("请求失败：" + e.message); }
+}
+async function dockerAct(action, name){
+  if(!confirm(`确认${action==="restart"?"重启":"停止"}容器 ${name}？`)) return;
+  try{
+    const r = await api(`/api/docker/${action}?name=`+encodeURIComponent(name), "POST");
+    if(!r.ok) alert("操作失败：" + r.message);
+    setTimeout(refreshStatus, 1500);
+  }catch(e){ alert("请求失败：" + e.message); }
+}
+async function refreshProcs(){
+  const q = document.getElementById("proc-search").value.trim();
+  const d = await api("/api/procs" + (q? "?search="+encodeURIComponent(q):""));
+  renderProcs(d.procs);
+}
+
+refreshStatus(); refreshHistory();
+setInterval(refreshStatus, 3000);
+setInterval(refreshHistory, 30000);
+window.addEventListener("resize", refreshHistory);
+</script>
+</body>
+</html>

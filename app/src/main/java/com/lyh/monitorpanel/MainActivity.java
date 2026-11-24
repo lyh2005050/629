@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -19,8 +20,12 @@ public class MainActivity extends Activity {
     private static final String PANEL_URL =
             "http://zzj3.wch1.top:32304/?token=LaVORht8oo3xLUOD";
 
+    /** 远端不可达时的本地兜底页（assets 内）。 */
+    private static final String FALLBACK_URL = "file:///android_asset/web/index.html";
+
     private WebView webView;
     private ProgressBar progressBar;
+    private boolean fallbackLoaded = false;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -51,6 +56,14 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 progressBar.setVisibility(View.GONE);
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame() && !fallbackLoaded) {
+                    fallbackLoaded = true;
+                    view.loadUrl(FALLBACK_URL);
+                }
             }
         });
 
