@@ -12,15 +12,21 @@ DIY 轻量主机监控面板：服务端 Python 标准库零依赖采集 `/proc`
 │   └── src/main/
 │       ├── AndroidManifest.xml
 │       ├── java/com/lyh/monitorpanel/MainActivity.java
-│       └── res/                      # 布局、主题、颜色、图标
+│       ├── res/                      # 布局、主题、颜色、图标
+│       └── assets/
+│           ├── web/index.html        # 离线兜底面板页（远端不可达时加载）
+│           └── bt-static/            # 内置宝塔风格静态资源（图片/样式）
 ├── panel-src/                        # 服务端面板源码（部署在 zzj3）
 │   ├── app.py                        # 采集 + HTTP 服务（标准库，无 pip 依赖）
-│   └── index.html                    # 前端页面，3 秒自动刷新
+│   └── index.html                    # 前端面板，3 秒自动刷新
 ├── settings.gradle
 ├── build.gradle
 ├── gradle.properties
 └── gradle/wrapper/gradle-wrapper.properties
 ```
+
+### 安卓离线兜底
+`MainActivity` 优先加载线上面板；主框架加载失败（断网/服务器不可达）时自动回退到 `assets/web/index.html` 本地兜底页，`fallbackLoaded` 标志防止循环跳转。
 
 ## 一、编译安卓 APK
 
@@ -91,7 +97,13 @@ systemctl restart monitor-panel
 ```
 
 ### 采集指标
-CPU 使用率/核数/负载、内存/缓存/Swap、磁盘分区用量、网卡上下行速率与累计、进程 Top8（按 CPU）、Docker 运行容器列表、主机名/系统/内核/运行时间。
+- 实时：CPU 使用率/核数/负载、内存/缓存/Swap、磁盘分区用量、磁盘 IO、网卡上下行速率与累计、TCP 连接数与监听端口、系统服务列表、Docker 运行容器、温度传感器、进程 Top（按 CPU）。
+- 历史：SQLite 持久化最近 24 小时快照，前端可切换 1h / 6h / 24h 趋势双曲线图。
+- 告警：CPU / 内存 / Swap / 磁盘 / 负载分级（ok / warn / bad），顶部告警条提示。
+- 管理：进程可搜索并 SIGTERM 结束；Docker 容器可重启 / 停止。
+
+### HTTP 接口
+`GET /`、`GET /api/status`、`GET /api/history?range=秒`、`GET /api/procs?search=`、`GET /api/services`、`POST /api/proc/kill?pid=`、`POST /api/docker/restart?name=`、`POST /api/docker/stop?name=`；鉴权走 query `token=` 或 header `X-Panel-Token`。
 
 ## 三、监控对象
 - 主机：`zzj3.wch1.top`（公网 IP `222.186.57.226`，SSH 端口 `32614`）
