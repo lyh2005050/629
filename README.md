@@ -46,9 +46,17 @@ DIY 轻量主机监控面板：服务端 Python 标准库零依赖采集 `/proc`
 
 ### 云端编译（GitHub Actions，无需本地 Android Studio）
 - 工作流：`.github/workflows/build-apk.yml`
-- 推送 `main` 或在 Actions 页手动触发（`workflow_dispatch`）后，runner 自动装 SDK、用 Gradle 7.6.4 编译 debug APK。
-- 构建完成后，在该次运行页面底部 **Artifacts** 下载 `monitor-panel-debug`，解压即得 `app-debug.apk`（artifact 保留 30 天）。
+- 推送 `main` 或在 Actions 页手动触发（`workflow_dispatch`）后，runner 自动装 SDK、用 Gradle 7.6.4 同时构建 debug 与 release 两个包。
+- 构建完成后，在该次运行页面底部 **Artifacts** 下载：
+  - `monitor-panel-debug` → `app-debug.apk`（调试签名）
+  - `monitor-panel-release` → `app-release.apk`（正式签名，可长期安装/覆盖升级）
+  - artifact 保留 30 天。
 - 也可在仓库页 **Actions → Build Android APK → Run workflow** 手动重跑。
+
+### 签名密钥管理
+- release 包使用独立 keystore 签名，材料保存在仓库 GitHub Secrets：`KEYSTORE_BASE64`、`KEYSTORE_PASSWORD`、`KEY_ALIAS`、`KEY_PASSWORD`。
+- 别名 `monitor`，RSA 2048，SHA256withRSA，有效期至 2051 年。
+- **keystore 与密码务必本地备份**；一旦丢失，将无法再用同一签名升级已安装的应用（只能换新签名、卸载后重装）。仓库内不提交 keystore 与密码。
 
 ### 修改面板地址 / 密钥
 打开 `app/src/main/java/com/lyh/monitorpanel/MainActivity.java`，改顶部常量：
