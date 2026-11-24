@@ -6,6 +6,10 @@ android {
     namespace 'com.lyh.monitorpanel'
     compileSdk 33
 
+    aaptOptions {
+        noCompress 'png', 'jpg', 'jpeg'
+    }
+
     defaultConfig {
         applicationId "com.lyh.monitorpanel"
         minSdk 21
